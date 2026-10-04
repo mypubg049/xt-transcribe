@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>XT Transcribe - YouTube video to text</title>
+<meta name="description" content="Paste a YouTube link and get the full transcript in seconds. Copy it or download it as a text file. Free.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23FFC857'/%3E%3Ctext x='32' y='42' font-family='Arial' font-weight='700' font-size='28' text-anchor='middle' fill='%232A1B00'%3EXT%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#0D1026; --text:#F2F4FF; --muted:#AEB4D6;
+  --glass:rgba(255,255,255,.08); --glass-line:rgba(255,255,255,.2);
+  --amber:#FFC857; --amber-edge:#B9830F; --danger:#FF9AAE;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:84px}
+body{margin:0;background:var(--ink);color:var(--text);font:400 16px/1.65 'DM Sans',system-ui,-apple-system,'Segoe UI',sans-serif;min-height:100vh;overflow-x:hidden;-webkit-text-size-adjust:100%}
+h1,h2,h3{font-family:'Bricolage Grotesque','DM Sans',system-ui,sans-serif;line-height:1.15;margin:0;letter-spacing:-.01em}
+a{color:inherit}
+:focus-visible{outline:3px solid #fff;outline-offset:3px}
+
+.bg{position:fixed;inset:0;z-index:-1;overflow:hidden;background:var(--ink)}
+.blob{position:absolute;border-radius:50%;filter:blur(90px);opacity:.8}
+.b1{width:440px;height:440px;background:#5B4BFF;top:-140px;left:-120px}
+.b2{width:400px;height:400px;background:#12C2B8;top:38%;right:-170px}
+.b3{width:360px;height:360px;background:#FF5C8A;bottom:-150px;left:8%}
+
+.glass{background:var(--glass);border:1px solid var(--glass-line);border-radius:22px;-webkit-backdrop-filter:blur(24px) saturate(140%);backdrop-filter:blur(24px) saturate(140%);box-shadow:0 20px 50px rgba(0,0,0,.28)}
+
+.btn{font:inherit;font-weight:700;color:var(--text);height:48px;padding:0 20px;border:0;border-radius:14px;cursor:pointer;background:rgba(255,255,255,.17);box-shadow:0 4px 0 rgba(255,255,255,.12),0 12px 24px rgba(0,0,0,.3),inset 0 1px 0 rgba(255,255,255,.32);transition:transform .08s,box-shadow .08s;display:inline-flex;align-items:center;justify-content:center;gap:8px;-webkit-tap-highlight-color:transparent}
+.btn:hover{background:rgba(255,255,255,.23)}
+.btn:active{transform:translateY(3px);box-shadow:0 1px 0 rgba(255,255,255,.12),0 5px 12px rgba(0,0,0,.3),inset 0 1px 0 rgba(255,255,255,.32)}
+.btn-primary{background:var(--amber);color:#2A1B00;box-shadow:0 4px 0 var(--amber-edge),0 14px 28px rgba(255,200,87,.25),inset 0 1px 0 rgba(255,255,255,.65)}
+.btn-primary:hover{background:#FFD274}
+.btn-primary:active{box-shadow:0 1px 0 var(--amber-edge),0 6px 14px rgba(255,200,87,.25),inset 0 1px 0 rgba(255,255,255,.65)}
+.btn-sm{height:42px;padding:0 16px;font-size:15px}
+
+header{position:sticky;top:0;z-index:20;padding:calc(10px + env(safe-area-inset-top,0px)) 14px 10px}
+.bar{max-width:760px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;padding:8px 10px 8px 16px;border-radius:18px}
+.logo{display:flex;align-items:center;gap:10px;font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:19px;text-decoration:none}
+.logo i{font-style:normal;width:32px;height:32px;border-radius:10px;background:var(--amber);color:#2A1B00;display:grid;place-items:center;font-size:14px;box-shadow:0 3px 0 var(--amber-edge)}
+.menu-btn{width:44px;height:44px;padding:0;flex-direction:column;gap:5px}
+.menu-btn span{display:block;width:18px;height:2px;border-radius:2px;background:var(--text)}
+.menu{position:absolute;right:14px;top:calc(68px + env(safe-area-inset-top,0px));width:min(260px,calc(100vw - 28px));padding:8px;display:none;background:rgba(24,28,66,.72)}
+.menu.open{display:block}
+.menu a{display:block;padding:12px 14px;border-radius:12px;text-decoration:none;font-weight:500}
+.menu a:hover{background:rgba(255,255,255,.12)}
+
+main{max-width:760px;margin:0 auto;padding:0 14px 40px}
+.hero{padding:34px 4px 22px;text-align:center}
+.hero h1{font-size:clamp(32px,8.5vw,52px);font-weight:700}
+.hero p{margin:14px auto 0;max-width:480px;color:var(--muted);font-size:17px}
+
+.tool{padding:18px}
+.field{display:flex;align-items:center;gap:8px;padding:6px 6px 6px 16px;border-radius:16px;background:rgba(10,13,36,.55);border:1px solid var(--glass-line);box-shadow:inset 0 2px 8px rgba(0,0,0,.3)}
+.field input{flex:1;min-width:0;height:44px;border:0;background:transparent;color:var(--text);font:inherit;font-size:16px;outline:0}
+.field input::placeholder{color:#8088B4}
+.field:focus-within{border-color:#fff}
+.go{width:100%;height:54px;margin-top:14px;font-size:17px}
+.err{display:none;margin:14px 2px 0;color:var(--danger);font-weight:500}
+.err.show{display:block}
+
+.result{display:none;margin-top:18px;padding:18px}
+.result.show{display:block}
+.result h2{font-size:22px;overflow-wrap:anywhere}
+.meta{margin:4px 0 0;color:var(--muted);font-size:14px}
+.tools{display:flex;flex-wrap:wrap;gap:10px;margin:16px 0}
+.tools select{height:42px;border-radius:14px;border:1px solid var(--glass-line);background:rgba(10,13,36,.6);color:var(--text);font:inherit;font-size:15px;padding:0 12px;max-width:100%}
+.toggle{display:inline-flex;align-items:center;gap:8px;font-size:15px;cursor:pointer;padding:0 4px}
+.toggle input{width:20px;height:20px;accent-color:var(--amber)}
+.text{max-height:56vh;overflow:auto;padding:14px;border-radius:16px;background:rgba(10,13,36,.55);border:1px solid var(--glass-line);-webkit-overflow-scrolling:touch}
+.line{margin:0 0 10px}
+.line:last-child{margin:0}
+.ts{display:none;margin-right:10px;color:var(--amber);font-size:13px;font-variant-numeric:tabular-nums}
+.text.with-ts .ts{display:inline}
+
+section.info{margin-top:28px;padding:22px}
+section.info h2{font-size:24px;margin-bottom:14px}
+section.info p{margin:0 0 10px;color:var(--muted)}
+.steps{margin:0;padding:0;list-style:none;display:grid;gap:12px;counter-reset:s}
+.steps li{counter-increment:s;display:flex;gap:14px;align-items:flex-start}
+.steps li::before{content:counter(s);flex:none;width:32px;height:32px;border-radius:10px;background:rgba(255,255,255,.16);display:grid;place-items:center;font-weight:700}
+details{border-top:1px solid var(--glass-line);padding:12px 0}
+details:first-of-type{border-top:0}
+summary{cursor:pointer;font-weight:700;list-style:none}
+summary::-webkit-details-marker{display:none}
+details p{margin:8px 0 0}
+footer{text-align:center;color:var(--muted);font-size:14px;padding:6px 16px calc(28px + env(safe-area-inset-bottom,0px))}
+
+.overlay{position:fixed;inset:0;z-index:50;display:none;align-items:center;justify-content:center;padding:16px;background:rgba(8,10,28,.5);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}
+.overlay.open{display:flex}
+.modal{width:min(100%,400px);padding:22px;text-align:center;background:rgba(24,28,66,.7);max-height:calc(100vh - 32px);overflow:auto}
+.ring{position:relative;width:76px;height:76px;margin:0 auto 12px}
+.ring svg{transform:rotate(-90deg)}
+.ring circle{fill:none;stroke-width:6}
+.ring .track{stroke:rgba(255,255,255,.18)}
+.ring .bar2{stroke:var(--amber);stroke-linecap:round;stroke-dasharray:188.5;stroke-dashoffset:0}
+.ring b{position:absolute;inset:0;display:grid;place-items:center;font-family:'Bricolage Grotesque',sans-serif;font-size:26px}
+.modal h3{font-size:20px}
+.modal p{margin:6px 0 0;color:var(--muted);font-size:14px}
+.adbox{margin:16px auto 0;width:100%;max-width:320px;min-height:250px;border-radius:16px;background:rgba(10,13,36,.55);border:1px dashed var(--glass-line);display:grid;place-items:center;overflow:hidden}
+.adbox iframe{border:0;width:100%;height:250px;display:block}
+.adbox span{color:#8088B4;font-size:14px;padding:12px}
+
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}.btn{transition:none}}
+</style>
+</head>
+<body>
+<div class="bg" aria-hidden="true"><div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div></div>
+
+<header>
+  <div class="bar glass">
+    <a class="logo" href="#top"><i>XT</i>XT Transcribe</a>
+    <button class="btn menu-btn" id="menuBtn" aria-label="Open menu" aria-expanded="false" aria-controls="menu"><span></span><span></span><span></span></button>
+  </div>
+  <nav class="menu glass" id="menu" aria-label="Site menu">
+    <a href="#top">Home</a>
+    <a href="#how">How it works</a>
+    <a href="#faq">FAQ</a>
+    <a href="#privacy">Privacy policy</a>
+  </nav>
+</header>
+
+<main id="top">
+  <div class="hero">
+    <h1>YouTube video to text, in seconds</h1>
+    <p>Paste a video link, press Transcribe, and get the full transcript. Copy it or download it.</p>
+  </div>
+
+  <div class="tool glass">
+    <div class="field">
+      <input id="url" type="url" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="https://www.youtube.com/watch?v=..." aria-label="YouTube video link">
+      <button class="btn btn-sm" id="pasteBtn" type="button">Paste</button>
+    </div>
+    <button class="btn btn-primary go" id="goBtn" type="button">Transcribe</button>
+    <div class="err" id="err" role="alert"></div>
+  </div>
+
+  <div class="result glass" id="result" aria-live="polite">
+    <h2 id="rTitle"></h2>
+    <p class="meta" id="rMeta"></p>
+    <div class="tools">
+      <button class="btn btn-sm" id="copyBtn" type="button">Copy</button>
+      <button class="btn btn-sm" id="dlBtn" type="button">Download</button>
+      <select id="langSel" aria-label="Transcript language" hidden></select>
+      <label class="toggle"><input type="checkbox" id="tsToggle" checked>Timestamps</label>
+    </div>
+    <div class="text with-ts" id="rText"></div>
+  </div>
+
+  <section class="info glass" id="how">
+    <h2>How it works</h2>
+    <ol class="steps">
+      <li><div>Copy the link of any YouTube video.</div></li>
+      <li><div>Paste it above and press Transcribe.</div></li>
+      <li><div>Watch a short ad while your transcript is prepared.</div></li>
+      <li><div>Copy the text or download it as a file.</div></li>
+    </ol>
+  </section>
+
+  <section class="info glass" id="faq">
+    <h2>FAQ</h2>
+    <details><summary>Does it work on every video?</summary><p>It works on videos that have captions, including auto-generated ones. If a video has none, you'll see a message saying so.</p></details>
+    <details><summary>Is it free?</summary><p>Yes. The ads you see while waiting keep XT Transcribe free.</p></details>
+    <details><summary>Which languages are supported?</summary><p>Any language the video has captions in. If there's more than one, pick it from the list above the transcript.</p></details>
+    <details><summary>Do you save my transcripts?</summary><p>No. Your link is used to fetch the transcript and it's shown only in your browser.</p></details>
+  </section>
+
+  <section class="info glass" id="privacy">
+    <h2>Privacy policy</h2>
+    <p>XT Transcribe doesn't ask you to sign up and doesn't store the links you paste or the transcripts you get.</p>
+    <p>Our ad partners may use cookies to show ads. You can block or delete cookies in your browser settings.</p>
+    <p>XT Transcribe isn't affiliated with or endorsed by YouTube or Google.</p>
+  </section>
+</main>
+
+<footer>XT Transcribe</footer>
+
+<div class="overlay" id="overlay" role="dialog" aria-modal="true" aria-labelledby="adTitle">
+  <div class="modal glass">
+    <div class="ring">
+      <svg width="76" height="76" viewBox="0 0 76 76" aria-hidden="true"><circle class="track" cx="38" cy="38" r="30"/><circle class="bar2" id="ringBar" cx="38" cy="38" r="30"/></svg>
+      <b id="count">10</b>
+    </div>
+    <h3 id="adTitle">Preparing your transcript</h3>
+    <p>It will appear in a few seconds.</p>
+    <div class="adbox" id="adbox"><span>Your ad shows here</span></div>
+  </div>
+</div>
+
+<template id="adTemplate">
+<!--
+  PASTE YOUR ADSTERRA BANNER (300x250) CODE HERE, INSIDE THIS TEMPLATE.
+  Example shape: <script>atOptions = {...}</script><script src="//.../invoke.js"></script>
+-->
+</template>
+
+<script>
+(function () {
+  var AD_SECONDS = 10;
+  var $ = function (s) { return document.querySelector(s); };
+  var urlInput = $('#url'), goBtn = $('#goBtn'), errBox = $('#err');
+  var overlay = $('#overlay'), count = $('#count'), ringBar = $('#ringBar'), adbox = $('#adbox');
+  var result = $('#result'), rText = $('#rText'), langSel = $('#langSel');
+  var current = null, busy = false;
+
+  var menuBtn = $('#menuBtn'), menu = $('#menu');
+  function setMenu(open) {
+    menu.classList.toggle('open', open);
+    menuBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+  menuBtn.addEventListener('click', function (e) { e.stopPropagation(); setMenu(!menu.classList.contains('open')); });
+  menu.addEventListener('click', function () { setMenu(false); });
+  document.addEventListener('click', function (e) { if (!menu.contains(e.target)) setMenu(false); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') setMenu(false); });
+
+  function showError(msg) { errBox.textContent = msg; errBox.classList.add('show'); }
+  function clearError() { errBox.textContent = ''; errBox.classList.remove('show'); }
+
+  function looksLikeYouTube(v) {
+    return /(?:youtu\.be\/|youtube\.com\/|youtube-nocookie\.com\/)/i.test(v) || /^[\w-]{11}$/.test(v);
+  }
+
+  $('#pasteBtn').addEventListener('click', function () {
+    if (navigator.clipboard && navigator.clipboard.readText) {
+      navigator.clipboard.readText().then(function (t) {
+        if (t) { urlInput.value = t.trim(); clearError(); }
+        else urlInput.focus();
+      }).catch(function () { urlInput.focus(); });
+    } else { urlInput.focus(); }
+  });
+
+  function fmt(sec) {
+    sec = Math.floor(sec);
+    var h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+    var mm = (h ? String(m).padStart(2, '0') : String(m)), ss = String(s).padStart(2, '0');
+    return (h ? h + ':' : '') + mm + ':' + ss;
+  }
+
+  function fetchTranscript(link, lang) {
+    var ctrl = new AbortController();
+    var timer = setTimeout(function () { ctrl.abort(); }, 28000);
+    var q = '/.netlify/functions/transcribe?url=' + encodeURIComponent(link) + (lang ? '&lang=' + encodeURIComponent(lang) : '');
+    return fetch(q, { signal: ctrl.signal }).then(function (res) {
+      return res.json().catch(function () { return {}; }).then(function (data) {
+        if (!res.ok) throw new Error(data.error || 'Something went wrong. Try again.');
+        return data;
+      });
+    }).catch(function (e) {
+      if (e && e.name === 'AbortError') throw new Error('This took too long. Try again.');
+      if (e instanceof TypeError) throw new Error("Couldn't connect. Check your internet and try again.");
+      throw e;
+    }).then(function (d) { clearTimeout(timer); return d; }, function (e) { clearTimeout(timer); throw e; });
+  }
+
+  function loadAd() {
+    var tpl = $('#adTemplate');
+    var code = (tpl.innerHTML || '').replace(/<!--[\s\S]*?-->/g, '').trim();
+    adbox.innerHTML = '';
+    if (!code) { adbox.innerHTML = '<span>Your ad shows here</span>'; return; }
+    var f = document.createElement('iframe');
+    f.setAttribute('title', 'Advertisement');
+    f.setAttribute('scrolling', 'no');
+    f.srcdoc = '<!doctype html><html><body style="margin:0;display:flex;justify-content:center;background:transparent">' + code + '</body></html>';
+    adbox.appendChild(f);
+  }
+
+  function runCountdown() {
+    return new Promise(function (resolve) {
+      var left = AD_SECONDS;
+      count.textContent = left;
+      ringBar.style.transition = 'none';
+      ringBar.style.strokeDashoffset = '0';
+      void ringBar.getBoundingClientRect();
+      ringBar.style.transition = 'stroke-dashoffset ' + AD_SECONDS + 's linear';
+      ringBar.style.strokeDashoffset = '188.5';
+      var iv = setInterval(function () {
+        left--;
+        count.textContent = Math.max(left, 0);
+        if (left <= 0) { clearInterval(iv); resolve(); }
+      }, 1000);
+      overlay._stop = function () { clearInterval(iv); };
+    });
+  }
+
+  function closeOverlay() {
+    if (overlay._stop) overlay._stop();
+    overlay.classList.remove('open');
+    adbox.innerHTML = '';
+    document.body.style.overflow = '';
+  }
+
+  function render(d) {
+    current = d;
+    $('#rTitle').textContent = d.title;
+    $('#rMeta').textContent = d.segments.length + ' lines';
+    rText.innerHTML = '';
+    d.segments.forEach(function (s) {
+      var p = document.createElement('p'); p.className = 'line';
+      var t = document.createElement('span'); t.className = 'ts'; t.textContent = fmt(s.start);
+      p.appendChild(t); p.appendChild(document.createTextNode(s.text));
+      rText.appendChild(p);
+    });
+    rText.classList.toggle('with-ts', $('#tsToggle').checked);
+    if (d.languages && d.languages.length > 1) {
+      langSel.innerHTML = '';
+      d.languages.forEach(function (l) {
+        var o = document.createElement('option'); o.value = l.code; o.textContent = l.name;
+        if (l.code === d.language) o.selected = true;
+        langSel.appendChild(o);
+      });
+      langSel.hidden = false;
+    } else { langSel.hidden = true; }
+    result.classList.add('show');
+  }
+
+  goBtn.addEventListener('click', function () {
+    if (busy) return;
+    var link = urlInput.value.trim();
+    clearError();
+    if (!link) { showError('Paste a YouTube link first.'); urlInput.focus(); return; }
+    if (!looksLikeYouTube(link)) { showError("That doesn't look like a YouTube link. Check it and try again."); return; }
+
+    busy = true;
+    result.classList.remove('show');
+    overlay.classList.add('open');
+    document.body.style.overflow = 'hidden';
+    loadAd();
+
+    var failed = false;
+    var pData = fetchTranscript(link).catch(function (e) { failed = true; closeOverlay(); showError(e.message); busy = false; throw e; });
+    var pAd = runCountdown();
+    Promise.all([pData, pAd]).then(function (r) {
+      closeOverlay();
+      render(r[0]);
+      busy = false;
+      result.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }).catch(function () { if (!failed) { closeOverlay(); busy = false; } });
+  });
+
+  urlInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') goBtn.click(); });
+
+  langSel.addEventListener('change', function () {
+    var link = urlInput.value.trim();
+    clearError();
+    fetchTranscript(link, langSel.value).then(render).catch(function (e) { showError(e.message); });
+  });
+
+  $('#tsToggle').addEventListener('change', function (e) { rText.classList.toggle('with-ts', e.target.checked); });
+
+  function plainText() {
+    var withTs = $('#tsToggle').checked;
+    return current.segments.map(function (s) { return (withTs ? '[' + fmt(s.start) + '] ' : '') + s.text; }).join('\n');
+  }
+
+  $('#copyBtn').addEventListener('click', function () {
+    if (!current) return;
+    var btn = this, text = plainText();
+    function done() { btn.textContent = 'Copied'; setTimeout(function () { btn.textContent = 'Copy'; }, 1600); }
+    function fallback() {
+      var ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); done(); } catch (e) { showError("Couldn't copy. Select the text and copy it manually."); }
+      document.body.removeChild(ta);
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, fallback);
+    else fallback();
+  });
+
+  $('#dlBtn').addEventListener('click', function () {
+    if (!current) return;
+    var name = (current.title || 'transcript').replace(/[\\/:*?"<>|]+/g, '').trim().slice(0, 80) || 'transcript';
+    var blob = new Blob([current.title + '\n\n' + plainText() + '\n'], { type: 'text/plain;charset=utf-8' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = name + '.txt';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+  });
+})();
+</script>
+</body>
+</html>
