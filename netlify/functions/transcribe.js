@@ -1,4 +1,4 @@
-// XT Transcribe - Netlify Function
+// XT Transcribe - Netlify Function (v2)
 // Fetches the caption track of a YouTube video and returns it as JSON.
 // No npm packages needed (uses the built-in fetch of Node 18+).
 
@@ -13,16 +13,78 @@ const CLIENTS = [
     context: {
       client: {
         clientName: "ANDROID",
-        clientVersion: "20.10.38",
-        androidSdkVersion: 34,
+        clientVersion: "20.44.38",
+        androidSdkVersion: 30,
+        osName: "Android",
+        osVersion: "11",
         hl: "en",
         gl: "US",
       },
     },
     headers: {
-      "User-Agent": "com.google.android.youtube/20.10.38 (Linux; U; Android 14) gzip",
+      "User-Agent": "com.google.android.youtube/20.44.38 (Linux; U; Android 11) gzip",
       "X-YouTube-Client-Name": "3",
-      "X-YouTube-Client-Version": "20.10.38",
+      "X-YouTube-Client-Version": "20.44.38",
+    },
+  },
+  {
+    name: "ANDROID_VR",
+    context: {
+      client: {
+        clientName: "ANDROID_VR",
+        clientVersion: "1.62.27",
+        deviceMake: "Oculus",
+        deviceModel: "Quest 3",
+        androidSdkVersion: 32,
+        osName: "Android",
+        osVersion: "12L",
+        hl: "en",
+        gl: "US",
+      },
+    },
+    headers: {
+      "User-Agent":
+        "com.google.android.apps.youtube.vr.oculus/1.62.27 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip",
+      "X-YouTube-Client-Name": "28",
+      "X-YouTube-Client-Version": "1.62.27",
+    },
+  },
+  {
+    name: "IOS",
+    context: {
+      client: {
+        clientName: "IOS",
+        clientVersion: "20.10.4",
+        deviceMake: "Apple",
+        deviceModel: "iPhone16,2",
+        osName: "iPhone",
+        osVersion: "18.3.2.22D82",
+        hl: "en",
+        gl: "US",
+      },
+    },
+    headers: {
+      "User-Agent": "com.google.ios.youtube/20.10.4 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X;)",
+      "X-YouTube-Client-Name": "5",
+      "X-YouTube-Client-Version": "20.10.4",
+    },
+  },
+  {
+    name: "WEB_EMBEDDED",
+    context: {
+      client: {
+        clientName: "WEB_EMBEDDED_PLAYER",
+        clientVersion: "1.20250310.01.00",
+        hl: "en",
+        gl: "US",
+      },
+      thirdParty: { embedUrl: "https://www.google.com" },
+    },
+    headers: {
+      "User-Agent":
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+      "X-YouTube-Client-Name": "56",
+      "X-YouTube-Client-Version": "1.20250310.01.00",
     },
   },
   {
@@ -112,38 +174,33 @@ function parseCaptionXml(xml) {
   return segments;
 }
 
-async function getApiKey() {
+function parseCaptionJson(text) {
   try {
-    const res = await fetch("https://www.youtube.com/", {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36",
-        "Accept-Language": "en-US,en;q=0.9",
-        Cookie: "CONSENT=YES+1",
-      },
+    const data = JSON.parse(text);
+    const segments = [];
+    (data.events || []).forEach((ev) => {
+      if (!ev.segs) return;
+      const t = ev.segs.map((s) => s.utf8 || "").join("").replace(/\s*\n\s*/g, " ").trim();
+      if (t) segments.push({ start: (ev.tStartMs || 0) / 1000, text: t });
     });
-    const html = await res.text();
-    const m = html.match(/"INNERTUBE_API_KEY":"([^"]+)"/);
-    return m ? m[1] : null;
+    return segments;
   } catch (e) {
-    return null;
+    return [];
   }
 }
 
-async function callPlayer(videoId, client, apiKey) {
-  const endpoint =
-    "https://www.youtube.com/youtubei/v1/player?prettyPrint=false" + (apiKey ? "&key=" + apiKey : "");
-  const res = await fetch(endpoint, {
+async function callPlayer(videoId, client) {
+  const context = JSON.parse(JSON.stringify(client.context));
+  const res = await fetch("https://www.youtube.com/youtubei/v1/player?prettyPrint=false", {
     method: "POST",
     headers: { "Content-Type": "application/json", Cookie: "CONSENT=YES+1", ...client.headers },
-    body: JSON.stringify({
-      context: client.context,
-      videoId,
-      contentCheckOk: true,
-      racyCheckOk: true,
-    }),
+    body: JSON.stringify({ context, videoId, contentCheckOk: true, racyCheckOk: true }),
+    signal: AbortSignal.timeout(7000),
   });
-  if (!res.ok) return null;
-  return res.json();
+  if (!res.ok) return { note: client.name + ":HTTP" + res.status, player: null };
+  const player = await res.json();
+  const status = (player.playabilityStatus && player.playabilityStatus.status) || "?";
+  return { note: client.name + ":" + status, player, client };
 }
 
 function tracksOf(player) {
@@ -163,25 +220,6 @@ function trackName(track) {
   return track.languageCode;
 }
 
-async function loadPlayer(videoId) {
-  let lastPlayer = null;
-  let apiKey = null;
-  for (let round = 0; round < 2; round++) {
-    for (const client of CLIENTS) {
-      try {
-        const player = await callPlayer(videoId, client, apiKey);
-        if (player) lastPlayer = lastPlayer || player;
-        if (tracksOf(player).length) return { player, tracks: tracksOf(player) };
-        if (player) lastPlayer = player;
-      } catch (e) {
-        /* try next client */
-      }
-    }
-    if (round === 0) apiKey = await getApiKey();
-  }
-  return { player: lastPlayer, tracks: [] };
-}
-
 function pickTrack(tracks, lang) {
   if (lang) {
     const exact = tracks.find((t) => t.languageCode === lang);
@@ -195,6 +233,21 @@ function pickTrack(tracks, lang) {
   return manual || tracks[0];
 }
 
+async function fetchSegments(track, client) {
+  const base = track.baseUrl.replace(/&fmt=[^&]*/, "");
+  const headers = {
+    "User-Agent": client.headers["User-Agent"],
+    "Accept-Language": "en-US,en;q=0.9",
+    Cookie: "CONSENT=YES+1",
+  };
+  const res = await fetch(base, { headers, signal: AbortSignal.timeout(7000) });
+  const body = await res.text();
+  let segs = parseCaptionXml(body);
+  if (segs.length) return segs;
+  const res2 = await fetch(base + "&fmt=json3", { headers, signal: AbortSignal.timeout(7000) });
+  return parseCaptionJson(await res2.text());
+}
+
 exports.handler = async (event) => {
   try {
     const params = event.queryStringParameters || {};
@@ -203,46 +256,57 @@ exports.handler = async (event) => {
       return reply(400, { error: "That doesn't look like a valid YouTube link. Check it and try again." });
     }
 
-    const { player, tracks } = await loadPlayer(videoId);
+    const settled = await Promise.all(
+      CLIENTS.map((c) => callPlayer(videoId, c).catch((e) => ({ note: c.name + ":ERR", player: null })))
+    );
+    const notes = settled.map((s) => s.note);
 
-    const status = player && player.playabilityStatus && player.playabilityStatus.status;
-    if (!tracks.length) {
-      if (status && status !== "OK") {
-        const reason =
-          (player.playabilityStatus.reason || "").toString().slice(0, 140) || "This video can't be accessed.";
-        return reply(422, { error: "Couldn't open this video. " + reason });
+    let sawOk = false;
+    let reason = "";
+    for (const s of settled) {
+      const p = s.player;
+      if (!p) continue;
+      const st = p.playabilityStatus && p.playabilityStatus.status;
+      if (st === "OK") sawOk = true;
+      else if (!reason && p.playabilityStatus && p.playabilityStatus.reason) {
+        reason = String(p.playabilityStatus.reason).slice(0, 140);
       }
-      if (player) {
-        return reply(404, { error: "This video has no captions, so there's nothing to transcribe." });
+      const tracks = tracksOf(p);
+      if (!tracks.length) continue;
+      const track = pickTrack(tracks, params.lang);
+      let segments = [];
+      try {
+        segments = await fetchSegments(track, s.client);
+      } catch (e) {
+        notes.push(s.client.name + ":CAPFAIL");
       }
-      return reply(502, { error: "Couldn't reach YouTube right now. Try again in a minute." });
+      if (!segments.length) {
+        notes.push(s.client.name + ":EMPTY");
+        continue;
+      }
+      return reply(200, {
+        videoId,
+        title: (p.videoDetails && p.videoDetails.title) || "YouTube video",
+        language: track.languageCode,
+        languages: tracks.map((t) => ({
+          code: t.languageCode,
+          name: trackName(t) + (t.kind === "asr" ? " (auto)" : ""),
+        })),
+        segments,
+      });
     }
 
-    const track = pickTrack(tracks, params.lang);
-    const captionUrl = track.baseUrl.replace(/&fmt=[^&]*/, "");
-    const capRes = await fetch(captionUrl, {
-      headers: { "User-Agent": CLIENTS[0].headers["User-Agent"], "Accept-Language": "en-US,en;q=0.9" },
-    });
-    const xml = await capRes.text();
-    const segments = parseCaptionXml(xml);
-
-    if (!segments.length) {
-      return reply(502, { error: "YouTube didn't return caption text for this video. Try again in a minute." });
+    const debug = " [" + notes.join(", ") + "]";
+    if (sawOk && !notes.some((n) => /EMPTY|CAPFAIL/.test(n))) {
+      return reply(404, { error: "This video has no captions, so there's nothing to transcribe." + debug });
     }
-
-    return reply(200, {
-      videoId,
-      title: (player.videoDetails && player.videoDetails.title) || "YouTube video",
-      language: track.languageCode,
-      languages: tracks.map((t) => ({
-        code: t.languageCode,
-        name: trackName(t) + (t.kind === "asr" ? " (auto)" : ""),
-      })),
-      segments,
-    });
+    if (reason) {
+      return reply(422, { error: "Couldn't open this video. " + reason + debug });
+    }
+    return reply(502, { error: "Couldn't get captions from YouTube right now. Try again in a minute." + debug });
   } catch (err) {
     return reply(500, { error: "Something went wrong on our side. Try again in a moment." });
   }
 };
 
-exports._test = { getVideoId, parseCaptionXml, decodeEntities };
+exports._test = { getVideoId, parseCaptionXml, parseCaptionJson, decodeEntities };
