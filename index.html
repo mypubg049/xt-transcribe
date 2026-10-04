@@ -105,6 +105,11 @@ footer{text-align:center;color:var(--muted);font-size:14px;padding:6px 16px calc
 .adbox iframe{border:0;width:100%;height:250px;display:block}
 .adbox span{color:#8088B4;font-size:14px;padding:12px}
 
+.ad-bottom{display:none;margin:24px auto 0;text-align:center}
+.ad-bottom.show{display:block}
+.ad-bottom small{display:block;margin-bottom:6px;color:#8088B4;font-size:12px;letter-spacing:.04em}
+.ad-bottom .frame{display:inline-block;max-width:100%;overflow:hidden;border-radius:10px;background:rgba(10,13,36,.35)}
+.ad-bottom iframe{border:0;display:block;width:320px;max-width:100%;height:50px}
 @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}.btn{transition:none}}
 </style>
 </head>
@@ -177,6 +182,8 @@ footer{text-align:center;color:var(--muted);font-size:14px;padding:6px 16px calc
   </section>
 </main>
 
+<div class="ad-bottom" id="adBottom"><small>Advertisement</small><div class="frame" id="adBottomFrame"></div></div>
+
 <footer>XT Transcribe</footer>
 
 <div class="overlay" id="overlay" role="dialog" aria-modal="true" aria-labelledby="adTitle">
@@ -191,13 +198,8 @@ footer{text-align:center;color:var(--muted);font-size:14px;padding:6px 16px calc
   </div>
 </div>
 
-<template id="adTemplate">
-<!--
-  PASTE YOUR ADSTERRA BANNER (300x250) CODE HERE, INSIDE THIS TEMPLATE.
-  Example shape: <script>atOptions = {...}</script><script src="//.../invoke.js"></script>
--->
-</template>
 
+<script src="ads-config.js"></script>
 <script>
 (function () {
   var AD_SECONDS = 10;
@@ -256,17 +258,33 @@ footer{text-align:center;color:var(--muted);font-size:14px;padding:6px 16px calc
     }).then(function (d) { clearTimeout(timer); return d; }, function (e) { clearTimeout(timer); throw e; });
   }
 
-  function loadAd() {
-    var tpl = $('#adTemplate');
-    var code = (tpl.innerHTML || '').replace(/<!--[\s\S]*?-->/g, '').trim();
-    adbox.innerHTML = '';
-    if (!code) { adbox.innerHTML = '<span>Your ad shows here</span>'; return; }
+  function adFrame(code, height) {
     var f = document.createElement('iframe');
     f.setAttribute('title', 'Advertisement');
     f.setAttribute('scrolling', 'no');
+    f.style.height = height + 'px';
     f.srcdoc = '<!doctype html><html><body style="margin:0;display:flex;justify-content:center;background:transparent">' + code + '</body></html>';
-    adbox.appendChild(f);
+    return f;
   }
+
+  function adCode(name) {
+    var cfg = window.XT_ADS || {};
+    return String(cfg[name] || '').replace(/<!--[\s\S]*?-->/g, '').trim();
+  }
+
+  function loadAd() {
+    var code = adCode('countdown');
+    adbox.innerHTML = '';
+    if (!code) { adbox.innerHTML = '<span>Your ad shows here</span>'; return; }
+    adbox.appendChild(adFrame(code, 250));
+  }
+
+  (function loadBottomAd() {
+    var code = adCode('bottom');
+    if (!code) return;
+    $('#adBottomFrame').appendChild(adFrame(code, 50));
+    $('#adBottom').classList.add('show');
+  })();
 
   function runCountdown() {
     return new Promise(function (resolve) {
